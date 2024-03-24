@@ -17,7 +17,7 @@ You can obtain the latest version from our [GitHub repository](https://github.co
 
 
 ```
-composer require dg/rss-php
+composer require SannyQ/rss-php
 ```
 
 [Support Me](https://github.com/sponsors/dg)
