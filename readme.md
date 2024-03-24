@@ -1,9 +1,8 @@
 # RSS & Atom Feeds for PHP
 ========================
 
-[![Downloads this Month](https://img.shields.io/packagist/dm/dg/rss-php.svg)](https://packagist.org/packages/dg/rss-php)
-[![Latest Stable Version](https://poser.pugx.org/dg/rss-php/v/stable)](https://github.com/dg/rss-php/releases)
-[![License](https://img.shields.io/badge/license-New%20BSD-blue.svg)](https://github.com/dg/rss-php/blob/master/license.md)
+[![Latest Stable Version](https://img.shields.io/badge/stable-v1.6-blue)](https://github.com/SannyQ/rss-php/releases)
+[![License](https://img.shields.io/badge/license-New%20BSD-blue.svg)](https://github.com/SannyQ/rss-php/blob/master/license.md)
 
 RSS & Atom Feeds for PHP is a very small and easy-to-use library for consuming an RSS and Atom feeds, updated to include support for Guzzle and other optimizations.
 
@@ -14,7 +13,7 @@ RSS & Atom Feeds for PHP is a very small and easy-to-use library for consuming a
 
 ## Installation
 
-You can obtain the latest version from our [GitHub repository](https://github.com/dg/rss-php/releases) or install it via Composer:
+You can obtain the latest version from our [GitHub repository](https://github.com/SannyQ/rss-php/releases) or install it via Composer:
 
 
 ```
