@@ -10,17 +10,17 @@
  */
 class Feed
 {
-    /** @var int Cache expiration time in seconds or a strtotime compatible string */
-    public static $cacheExpire = '1 day';
+	/** @var int Cache expiration time in seconds or a strtotime compatible string */
+	public static $cacheExpire = '1 day';
 
-    /** @var string Directory to store cache files */
-    public static $cacheDir;
+	/** @var string Directory to store cache files */
+	public static $cacheDir;
 
-    /** @var string Default User-Agent for HTTP requests */
-    public static $userAgent = 'FeedFetcher-Google';
+	/** @var string Default User-Agent for HTTP requests */
+	public static $userAgent = 'FeedFetcher-Google';
 
-    /** @var SimpleXMLElement XML element containing feed data */
-    protected $xml;
+	/** @var SimpleXMLElement XML element containing feed data */
+	protected $xml;
 
     /**
      * Loads RSS or Atom feed.
@@ -28,8 +28,8 @@ class Feed
      * @param string $url The feed URL
      * @param string|null $user Optional username for HTTP authentication
      * @param string|null $pass Optional password for HTTP authentication
-     * @return Feed Returns an instance of the Feed class.
-     * @throws FeedException Throws FeedException if feed cannot be loaded or parsed.
+     * @return Feed An instance of the Feed class
+     * @throws FeedException if the feed cannot be loaded or parsed
      */
 	public static function load($url, $user = null, $pass = null)
 	{
@@ -41,60 +41,52 @@ class Feed
 		}
 	}
 
-
-	/**
-	 * Loads RSS feed.
-	 * @param  string  RSS feed URL
-	 * @param  string  optional user name
-	 * @param  string  optional password
-	 * @return Feed
-	 * @throws FeedException
-	 */
+    /**
+     * Loads RSS feed.
+     * @param string $url RSS feed URL
+     * @param string|null $user Optional username
+     * @param string|null $pass Optional password
+     * @return Feed An instance of the Feed class
+     * @throws FeedException if the RSS feed cannot be loaded
+     */
 	public static function loadRss($url, $user = null, $pass = null)
 	{
 		return self::fromRss(self::loadXml($url, $user, $pass));
 	}
 
 
-	/**
-	 * Loads Atom feed.
-	 * @param  string  Atom feed URL
-	 * @param  string  optional user name
-	 * @param  string  optional password
-	 * @return Feed
-	 * @throws FeedException
-	 */
+    /**
+     * Loads Atom feed.
+     * @param string $url Atom feed URL
+     * @param string|null $user Optional username
+     * @param string|null $pass Optional password
+     * @return Feed An instance of the Feed class
+     * @throws FeedException if the Atom feed cannot be loaded
+     */
 	public static function loadAtom($url, $user = null, $pass = null)
 	{
 		return self::fromAtom(self::loadXml($url, $user, $pass));
 	}
 
-
 	private static function fromRss(SimpleXMLElement $xml)
 	{
-		if (!$xml->channel) {
-			throw new FeedException('Invalid feed.');
-		}
-
-		self::adjustNamespaces($xml);
-
-		foreach ($xml->channel->item as $item) {
-			// converts namespaces to dotted tags
-			self::adjustNamespaces($item);
-
-			// generate 'url' & 'timestamp' tags
-			$item->url = (string) $item->link;
-			if (isset($item->{'dc:date'})) {
-				$item->timestamp = strtotime($item->{'dc:date'});
-			} elseif (isset($item->pubDate)) {
-				$item->timestamp = strtotime($item->pubDate);
+		try {
+			if (!$xml->channel) {
+				throw new FeedParsingException('Invalid RSS feed format.');
 			}
-		}
-		$feed = new self;
-		$feed->xml = $xml->channel;
-		return $feed;
-	}
 
+			self::adjustNamespaces($xml);
+
+			foreach ($xml->channel->item as $item) {
+				self::adjustNamespaces($item); // converts namespaces to dotted tags
+				$item->url = (string) $item->link;
+				$item->timestamp = isset($item->{'dc:date'}) ? strtotime($item->{'dc:date'}) : (isset($item->pubDate) ? strtotime($item->pubDate) : null);
+			}
+			return new self($xml->channel);
+		} catch (\Exception $e) {
+			throw new FeedParsingException('Failed to process RSS feed: ' . $e->getMessage());
+		}
+	}
 
 	private static function fromAtom(SimpleXMLElement $xml)
 	{
@@ -102,7 +94,7 @@ class Feed
 			!in_array('http://www.w3.org/2005/Atom', $xml->getDocNamespaces(), true)
 			&& !in_array('http://purl.org/atom/ns#', $xml->getDocNamespaces(), true)
 		) {
-			throw new FeedException('Invalid feed.');
+			throw new FeedParsingException('Failed to process Atom feed: ' . $e->getMessage());
 		}
 
 		// generate 'url' & 'timestamp' tags
@@ -168,39 +160,42 @@ class Feed
 
     /**
      * Loads XML from cache or performs an HTTP request to retrieve the feed.
-     * Implements a caching mechanism and tries different methods for making HTTP requests.
+     * Implements a caching mechanism and tries various methods for making HTTP requests.
      * @param string $url The URL to request
      * @param string|null $user Optional username for HTTP authentication
      * @param string|null $pass Optional password for HTTP authentication
-     * @return SimpleXMLElement Returns a SimpleXMLElement object with the feed data.
-     * @throws FeedException Throws FeedException if the feed cannot be loaded.
+     * @return SimpleXMLElement A SimpleXMLElement object with the feed data
+     * @throws FeedException if the feed cannot be loaded
      */
 	private static function loadXml($url, $user, $pass)
 	{
 		$e = self::$cacheExpire;
 		$cacheFile = self::$cacheDir . '/feed.' . md5(serialize(func_get_args())) . '.xml';
 
-		if (
-			self::$cacheDir
-			&& (time() - @filemtime($cacheFile) <= (is_string($e) ? strtotime($e) - time() : $e))
-			&& $data = @file_get_contents($cacheFile)
-		) {
-			// ok
-		} elseif ($data = trim(self::httpRequest($url, $user, $pass))) {
-			if (self::$cacheDir) {
-				if (!@file_put_contents($cacheFile, $data)) {
-					throw new FeedException('Error when writing to the cache.');
-				} else {
-					file_put_contents($cacheFile, $data);
+		try {
+			if (self::$cacheDir && $data = @file_get_contents($cacheFile) && (time() - @filemtime($cacheFile) <= (is_string($e) ? strtotime($e) - time() : $e))) {
+				// Cache is valid
+			} elseif ($data = trim(self::httpRequest($url, $user, $pass))) {
+				if (self::$cacheDir) {
+					if (!@file_put_contents($cacheFile, $data)) {
+						throw new FeedConnectionException('Cannot load feed data: ' . $ex->getMessage());
+					}
 				}
+			} else {
+				throw new FeedConnectionException('Failed to load feed data.');
 			}
-		} elseif (self::$cacheDir && $data = @file_get_contents($cacheFile)) {
-			// ok
-		} else {
-			throw new FeedException('Cannot load feed.');
+		} catch (Exception $ex) {
+			// This catches any unexpected exceptions and rethrows them as a FeedException.
+			throw new FeedException('An unexpected error occurred: ' . $ex->getMessage());
 		}
 
-		return new SimpleXMLElement($data, LIBXML_NOWARNING | LIBXML_NOERROR | LIBXML_NOCDATA);
+		try {
+			$xml = new SimpleXMLElement($data, LIBXML_NOWARNING | LIBXML_NOERROR | LIBXML_NOCDATA);
+		} catch (Exception $ex) {
+			throw new FeedParsingException('Failed to parse feed data: ' . $ex->getMessage());
+		}
+
+		return $xml;
 	}
 
     /**
@@ -209,12 +204,12 @@ class Feed
      * @param string $url The URL to request
      * @param string|null $user Optional username for HTTP authentication
      * @param string|null $pass Optional password for HTTP authentication
-     * @return string|false Returns the response body as a string on success, or false on failure.
-     * @throws FeedException Throws FeedException if all methods to make an HTTP request fail.
+     * @return string|false The response body as a string on success, or false on failure
+     * @throws FeedException if all methods to make an HTTP request fail
      */
 	private static function httpRequest($url, $user, $pass)
 	{
-		// Schritt 1: Versuche GuzzleHttp zu verwenden
+		// Versuche, GuzzleHttp zu verwenden
 		if (class_exists('GuzzleHttp\Client')) {
 			try {
 				$client = new \GuzzleHttp\Client(['timeout' => 20, 'verify' => false]);
@@ -229,11 +224,12 @@ class Feed
 				$response = $client->request('GET', $url, $options);
 				return (string) $response->getBody();
 			} catch (\Exception $e) {
-				// Guzzle fehlgeschlagen, gehe zu cURL oder file_get_contents über
+				// Spezifische Exception für GuzzleHttp Fehler
+				throw new FeedConnectionException('GuzzleHttp failed: ' . $e->getMessage());
 			}
 		}
 
-		// Schritt 2: Fallback auf cURL, wenn Guzzle nicht verfügbar oder fehlgeschlagen ist
+		// Fallback auf cURL
 		if (extension_loaded('curl')) {
 			$curl = curl_init();
 			curl_setopt($curl, CURLOPT_URL, $url);
@@ -248,12 +244,14 @@ class Feed
 				curl_setopt($curl, CURLOPT_FOLLOWLOCATION, true);
 			}
 			$result = curl_exec($curl);
-			if (curl_errno($curl) === 0 && curl_getinfo($curl, CURLINFO_HTTP_CODE) === 200) {
-				return $result;
+			if (curl_errno($curl) !== 0 || curl_getinfo($curl, CURLINFO_HTTP_CODE) !== 200) {
+				// Spezifische Exception für cURL Fehler
+				throw new FeedConnectionException('cURL error: ' . curl_error($curl));
 			}
+			return $result;
 		}
 
-		// Schritt 3: Fallback auf file_get_contents, wenn cURL nicht verfügbar ist
+		// Fallback auf file_get_contents
 		$contextOptions = [
 			'http' => [
 				'method' => 'GET',
@@ -264,13 +262,17 @@ class Feed
 			$contextOptions['http']['header'] .= 'Authorization: Basic ' . base64_encode("$user:$pass") . "\r\n";
 		}
 		$context = stream_context_create($contextOptions);
-
-		return file_get_contents($url, false, $context);
+		$result = file_get_contents($url, false, $context);
+		if ($result === false) {
+			// Spezifische Exception für file_get_contents Fehler
+			throw new FeedConnectionException('file_get_contents failed');
+		}
+		return $result;
 	}
 
     /**
      * Adjusts XML namespaces to make them more accessible.
-     * @param SimpleXMLElement $el The element to adjust namespaces for.
+     * @param SimpleXMLElement $el The XML element to adjust namespaces for
      * @return void
      */
 	private static function adjustNamespaces($el)
@@ -293,4 +295,19 @@ class Feed
  */
 class FeedException extends Exception
 {
+}
+
+class FeedConnectionException extends FeedException
+{
+	protected $message = 'Failed to connect to the feed URL.';
+}
+
+class FeedParsingException extends FeedException
+{
+	protected $message = 'Failed to parse the feed content.';
+}
+
+class FeedCacheException extends FeedException
+{
+	protected $message = 'Cache-related error occurred.';
 }
